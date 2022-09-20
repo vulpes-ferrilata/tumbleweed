@@ -1,0 +1,124 @@
+version: "3.9"
+
+networks:
+    frontend:
+        driver: bridge
+    backend:
+        driver: bridge
+
+services:
+    mongo:
+        image: 'bitnami/mongodb:latest'
+        environment:
+            - MONGODB_REPLICA_SET_MODE=primary
+            - MONGODB_ROOT_USER=root
+            - MONGODB_ROOT_PASSWORD=123456
+            - MONGODB_REPLICA_SET_KEY=replicasetkey123
+        healthcheck:
+            test: test $$(echo "rs.initiate().ok || rs.status().ok" | mongo -u $${MONGODB_ROOT_USER} -p $${MONGODB_ROOT_PASSWORD} --quiet) -eq 1
+            interval: 10s
+            timeout: 10s
+            retries: 5
+            start_period: 40s
+        networks:
+            - backend
+          
+    redis:
+        image: "bitnami/redis:latest"
+        environment:
+            - REDIS_PASSWORD=123456
+        healthcheck:
+            test: ["CMD", "redis-cli","ping"]
+            interval: 10s
+            timeout: 10s
+            retries: 5
+            start_period: 40s
+        networks:
+            - backend
+            
+    database-migration:
+        image: "ferrilata/database-migration:latest"
+        environment:
+            - DATABASE_ADDRESS=mongo:27017
+            - DATABASE_USER=root
+            - DATABASE_PASSWORD=123456
+        networks:
+            - backend
+        depends_on:
+            mongo:
+                condition: service_healthy
+
+    user-service:
+        image: "ferrilata/user-service:latest"
+        environment:
+            - DATABASE_ADDRESS=mongo:27017
+            - DATABASE_NAME=user
+            - DATABASE_USERNAME=user
+            - DATABASE_PASSWORD=123456
+        networks:
+            - backend
+        depends_on:
+            database-migration:
+                condition: service_completed_successfully
+                
+    authentication-service:
+        image: "ferrilata/authentication-service:latest"
+        environment:
+            - DATABASE_ADDRESS=mongo:27017
+            - DATABASE_NAME=authentication
+            - DATABASE_USERNAME=authentication
+            - DATABASE_PASSWORD=123456
+            - REDIS_ADDRESS=redis:6379
+            - REDIS_PASSWORD=123456
+            - ACCESS_TOKEN_ALGORITHM=HS512
+            - ACCESS_TOKEN_SECRET_KEY=jKwIWRvzDyn-e3xcMvWEe0oCwcdhUi0Hm7RDREEUFDgKWBHHbm2Fd0zWqYnQ5jWEl-SeGrV7rUx46p4ntQro5mweZBJiVDthrLZPK7bUustZZE-fOb0CIJizNNOBSwq0bS0uhwu9ftl7EPdzgs7ZNN6XMFu5fePI_d4q7UTFHAjZsY_Tn-PJz1sFjtV-2l9hsSlTN0XHC3-Ij5crhkObLOTAogjDBwrK8lo1g2D47fgi0uS5GlmEeAWfdcutmfQUIpmrCorU1-m2YKbbuJwzVU16oxHtXzJhEgJoQLE93lAUZ7GCGXuMoMj_bwiJoEo-4bN9ZA3_f-Th37HMWnf-lA
+            - ACCESS_TOKEN_EXPIRATION=1h
+            - REFRESH_TOKEN_ALGORITHM=HS512
+            - REFRESH_TOKEN_SECRET=zzKTTJb1J0pkcMM5iC3rECWfM3FJ57VYsztfIcpVVSsgUBnN2q6zoZgyx3yM6ub9D-ZPCL8GeaGA2H31vTml5MGgmZL830bfCjh1wrwoXghQOcpfojYBnK-8WZq6gxh4UXZA_TnDTGkKr78MbB5eb7xGjj5KcLeeJyxQvc_eK0FmXggHbb0ivpVdzRSa0xMtTL442jRTHiPD-P3GX9Q_uQuBmwD1084HvhDoXYQAB6FBe-BKs7EO-KdyK74_awhYyeeBOS7gS_IeNnRq44rnw0HCRiLViyBph-ivRoITPJZTLp8o3yfZZnLz4gJPCQ_gNL28Ft_SBitYTkKOYQ2hhA
+            - REFRESH_TOKEN_EXPIRATION=24h
+        networks:
+            - backend
+        depends_on:
+            database-migration:
+                condition: service_completed_successfully
+            redis:
+                condition: service_healthy
+    
+    catan-service:
+        image: "ferrilata/catan-service:latest"
+        environment:
+            - DATABASE_ADDRESS=mongo:27017
+            - DATABASE_NAME=catan
+            - DATABASE_USERNAME=catan
+            - DATABASE_PASSWORD=123456
+        networks:
+            - backend
+        depends_on:
+            database-migration:
+                condition: service_completed_successfully
+
+    api-gateway:
+        image: "ferrilata/api-gateway:latest"
+        environment:
+            - USER_SERVICE_ADDRESS=user-service:8080
+            - AUTHENTICATION_SERVICE_ADDRESS=authentication-service:8080
+            - CATAN_SERVICE_ADDRESS=catan-service:8080
+        networks:
+            - frontend
+            - backend
+        depends_on:
+            - user-service
+            - authentication-service
+            - catan-service
+    
+    web:
+        image: "ferrilata/boardgame-client:latest"
+        environment:
+            - API_GATEWAY_ADDRESS=api-gateway:8080
+        networks:
+            - frontend
+        ports:
+            - "80:80"
+        depends_on:
+            - api-gateway
+        
