@@ -15,7 +15,7 @@ services:
             - MONGODB_ROOT_PASSWORD=123456
             - MONGODB_REPLICA_SET_KEY=replicasetkey123
         healthcheck:
-            test: test $$(echo "rs.initiate().ok || rs.status().ok" | mongo -u $${MONGODB_ROOT_USER} -p $${MONGODB_ROOT_PASSWORD} --quiet) -eq 1
+            test: test $$(mongosh --eval "rs.status().ok" -u $${MONGODB_ROOT_USER} -p $${MONGODB_ROOT_PASSWORD} --quiet) -eq 1
             interval: 10s
             timeout: 10s
             retries: 5
