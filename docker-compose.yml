@@ -14,6 +14,9 @@ services:
             - MONGODB_ROOT_USER=root
             - MONGODB_ROOT_PASSWORD=123456
             - MONGODB_REPLICA_SET_KEY=replicasetkey123
+        volumes:
+            - ./Docker/mongo/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+        restart: always
         healthcheck:
             test: test $$(mongosh --eval "rs.status().ok" -u $${MONGODB_ROOT_USER} -p $${MONGODB_ROOT_PASSWORD} --quiet) -eq 1
             interval: 10s
@@ -27,8 +30,23 @@ services:
         image: "bitnami/redis:latest"
         environment:
             - REDIS_PASSWORD=123456
+        restart: always
         healthcheck:
             test: ["CMD", "redis-cli","ping"]
+            interval: 10s
+            timeout: 10s
+            retries: 5
+            start_period: 40s
+        networks:
+            - backend
+            
+    cassandra:
+        image: "bitnami/cassandra:latest"
+        volumes:
+            - ./Docker/cassandra/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+        restart: always
+        healthcheck:
+            test: ["CMD", "cqlsh", "-u", "cassandra", "-p", "cassandra", "-k", "chat"]
             interval: 10s
             timeout: 10s
             retries: 5
@@ -39,22 +57,29 @@ services:
     database-migration:
         image: "ferrilata/database-migration:latest"
         environment:
-            - DATABASE_ADDRESS=mongo:27017
-            - DATABASE_USER=root
-            - DATABASE_PASSWORD=123456
+            - MONGO_ADDRESS=mongo:27017
+            - MONGO_USERNAME=root
+            - MONGO_PASSWORD=123456
+            - CASSANDRA_ADDRESS=cassandra:9042
+            - CASSANDRA_USERNAME=cassandra
+            - CASSANDRA_PASSWORD=cassandra
+        restart: on-failure:5
         networks:
             - backend
         depends_on:
             mongo:
                 condition: service_healthy
+            cassandra:
+                condition: service_healthy
 
     user-service:
         image: "ferrilata/user-service:latest"
         environment:
-            - DATABASE_ADDRESS=mongo:27017
-            - DATABASE_NAME=user
-            - DATABASE_USERNAME=user
-            - DATABASE_PASSWORD=123456
+            - MONGO_ADDRESS=mongo:27017
+            - MONGO_DATABASE_NAME=user
+            - MONGO_USERNAME=app_user
+            - MONGO_PASSWORD=123456
+        restart: always
         networks:
             - backend
         depends_on:
@@ -64,10 +89,10 @@ services:
     authentication-service:
         image: "ferrilata/authentication-service:latest"
         environment:
-            - DATABASE_ADDRESS=mongo:27017
-            - DATABASE_NAME=authentication
-            - DATABASE_USERNAME=authentication
-            - DATABASE_PASSWORD=123456
+            - MONGO_ADDRESS=mongo:27017
+            - MONGO_DATABASE_NAME=authentication
+            - MONGO_USERNAME=app_user
+            - MONGO_PASSWORD=123456
             - REDIS_ADDRESS=redis:6379
             - REDIS_PASSWORD=123456
             - ACCESS_TOKEN_ALGORITHM=HS512
@@ -76,6 +101,7 @@ services:
             - REFRESH_TOKEN_ALGORITHM=HS512
             - REFRESH_TOKEN_SECRET=zzKTTJb1J0pkcMM5iC3rECWfM3FJ57VYsztfIcpVVSsgUBnN2q6zoZgyx3yM6ub9D-ZPCL8GeaGA2H31vTml5MGgmZL830bfCjh1wrwoXghQOcpfojYBnK-8WZq6gxh4UXZA_TnDTGkKr78MbB5eb7xGjj5KcLeeJyxQvc_eK0FmXggHbb0ivpVdzRSa0xMtTL442jRTHiPD-P3GX9Q_uQuBmwD1084HvhDoXYQAB6FBe-BKs7EO-KdyK74_awhYyeeBOS7gS_IeNnRq44rnw0HCRiLViyBph-ivRoITPJZTLp8o3yfZZnLz4gJPCQ_gNL28Ft_SBitYTkKOYQ2hhA
             - REFRESH_TOKEN_EXPIRATION=24h
+        restart: always
         networks:
             - backend
         depends_on:
@@ -87,10 +113,25 @@ services:
     catan-service:
         image: "ferrilata/catan-service:latest"
         environment:
-            - DATABASE_ADDRESS=mongo:27017
-            - DATABASE_NAME=catan
-            - DATABASE_USERNAME=catan
-            - DATABASE_PASSWORD=123456
+            - MONGO_ADDRESS=mongo:27017
+            - MONGO_DATABASE_NAME=catan
+            - MONGO_USERNAME=app_user
+            - MONGO_PASSWORD=123456
+        restart: always
+        networks:
+            - backend
+        depends_on:
+            database-migration:
+                condition: service_completed_successfully
+                
+    chat-service:
+        image: "ferrilata/chat-service:latest"
+        environment:
+            - CASSANDRA_ADDRESS=cassandra:9042
+            - CASSANDRA_KEYSPACE=chat
+            - CASSANDRA_USERNAME=cassandra
+            - CASSANDRA_PASSWORD=cassandra
+        restart: always
         networks:
             - backend
         depends_on:
@@ -103,6 +144,7 @@ services:
             - USER_SERVICE_ADDRESS=user-service:8080
             - AUTHENTICATION_SERVICE_ADDRESS=authentication-service:8080
             - CATAN_SERVICE_ADDRESS=catan-service:8080
+        restart: always
         networks:
             - frontend
             - backend
@@ -115,6 +157,7 @@ services:
         image: "ferrilata/boardgame-client:latest"
         environment:
             - API_GATEWAY_ADDRESS=api-gateway:8080
+        restart: always
         networks:
             - frontend
         ports:

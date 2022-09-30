@@ -1,0 +1,4 @@
+CREATE USER 'app_user' WITH PASSWORD '123456';
+
+GRANT SELECT ON KEYSPACE chat TO 'app_user';
+GRANT MODIFY ON KEYSPACE chat TO 'app_user';
