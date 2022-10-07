@@ -10,10 +10,11 @@ services:
     mongo:
         image: 'bitnami/mongodb:latest'
         environment:
-            - MONGODB_REPLICA_SET_MODE=primary
             - MONGODB_ROOT_USER=root
             - MONGODB_ROOT_PASSWORD=123456
+            - MONGODB_REPLICA_SET_MODE=primary
             - MONGODB_REPLICA_SET_KEY=replicasetkey123
+            - MONGODB_ADVERTISED_HOSTNAME=mongo
         volumes:
             - ./Docker/mongo/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
         restart: always
@@ -42,6 +43,9 @@ services:
             
     cassandra:
         image: "bitnami/cassandra:latest"
+        environment:
+            - CASSANDRA_USER=cassandra
+            - CASSANDRA_PASSWORD=cassandra
         volumes:
             - ./Docker/cassandra/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
         restart: always
@@ -144,6 +148,7 @@ services:
             - USER_SERVICE_ADDRESS=user-service:8080
             - AUTHENTICATION_SERVICE_ADDRESS=authentication-service:8080
             - CATAN_SERVICE_ADDRESS=catan-service:8080
+            - CHAT_SERVICE_ADDRESS=chat-service:8080
         restart: always
         networks:
             - frontend
