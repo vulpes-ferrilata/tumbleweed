@@ -59,7 +59,7 @@ services:
             - backend
             
     database-migration:
-        image: "ferrilata/database-migration:latest"
+        image: "ferrilata/tumbleweeds-database-migration:latest"
         environment:
             - MONGO_ADDRESS=mongo:27017
             - MONGO_USERNAME=root
@@ -91,7 +91,7 @@ services:
                 condition: service_completed_successfully
                 
     authentication-service:
-        image: "ferrilata/authentication-service:latest"
+        image: "ferrilata/tumbleweeds-authentication-service:latest"
         environment:
             - MONGO_ADDRESS=mongo:27017
             - MONGO_DATABASE_NAME=authentication
@@ -115,7 +115,7 @@ services:
                 condition: service_healthy
     
     catan-service:
-        image: "ferrilata/catan-service:latest"
+        image: "ferrilata/tumbleweeds-catan-service:latest"
         environment:
             - MONGO_ADDRESS=mongo:27017
             - MONGO_DATABASE_NAME=catan
@@ -129,7 +129,7 @@ services:
                 condition: service_completed_successfully
                 
     chat-service:
-        image: "ferrilata/chat-service:latest"
+        image: "ferrilata/tumbleweeds-chat-service:latest"
         environment:
             - CASSANDRA_ADDRESS=cassandra:9042
             - CASSANDRA_KEYSPACE=chat
@@ -143,7 +143,7 @@ services:
                 condition: service_completed_successfully
 
     api-gateway:
-        image: "ferrilata/api-gateway:latest"
+        image: "ferrilata/tumbleweeds-api-gateway:latest"
         environment:
             - USER_SERVICE_ADDRESS=user-service:8080
             - AUTHENTICATION_SERVICE_ADDRESS=authentication-service:8080
@@ -157,9 +157,10 @@ services:
             - user-service
             - authentication-service
             - catan-service
+            - chat-service
     
-    web:
-        image: "ferrilata/boardgame-client:latest"
+    webapp:
+        image: "ferrilata/tumbleweeds-webapp:latest"
         environment:
             - API_GATEWAY_ADDRESS=api-gateway:8080
         restart: always
